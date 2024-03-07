@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Enhanced Morse Code Player with Improved Efficiency, Error Handling, and Readability
+
 # Check for required dependencies
 if ! command -v play &>/dev/null; then
     echo "Error: The 'play' command is required but was not found. Please install 'sox'."
@@ -8,6 +10,10 @@ fi
 
 # Initial configuration
 FREQUENCY=1000 # Default sound frequency in Hz
+DIT_DURATION=0.1
+DAH_DURATION=0.3
+LETTER_PAUSE=0.4
+WORD_PAUSE=0.7
 
 # Morse Code declaration
 declare -A MORSE_CODE=(
@@ -23,8 +29,8 @@ declare -A MORSE_CODE=(
 # Function to play Morse sounds
 emit_sound() {
     local symbol="$1"
-    local duration=0.1 # Default duration for 'dit'
-    [[ "$symbol" == "-" ]] && duration=0.3 # Ensure 'dah' has correct duration
+    local duration="$DIT_DURATION" # Default duration for 'dit'
+    [[ "$symbol" == "-" ]] && duration="$DAH_DURATION" # 'dah' has longer duration
     play -n synth "$duration" sine "$FREQUENCY" &>/dev/null
 }
 
@@ -33,53 +39,50 @@ text_to_morse() {
     local text="$1" morse=""
     echo "Converting text to Morse:"
 
-    # Convert each character to Morse and append to morse variable
     for (( i=0; i<${#text}; i++ )); do
         char=${text:i:1}
-        morse+="${MORSE_CODE[${char^^}]+"${MORSE_CODE[${char^^}]} "}" # Correct handling to avoid adding "?" for spaces
+        morse+="${MORSE_CODE[${char^^}]+"${MORSE_CODE[${char^^}]} "}" 
     done
 
     echo "$morse"
 
-    # Play Morse code
     for (( j=0; j<${#morse}; j++ )); do
         symbol=${morse:j:1}
         if [[ $symbol =~ [.-] ]]; then
             echo -n "$symbol"
             emit_sound "$symbol"
         elif [[ $symbol == " " ]]; then
-            sleep 0.4 # Adjust for spacing between letters
+            sleep "$LETTER_PAUSE" # Adjust for spacing between letters
         elif [[ $symbol == "/" ]]; then
             echo -n " / "
-            sleep 0.7 # Adjust for spacing between words
+            sleep "$WORD_PAUSE" # Adjust for spacing between words
         fi
     done
     echo
 }
 
-
-# Interactive mode to capture arrow keys for Morse code input
+# Function to capture arrow keys for Morse code input with enhanced input handling
 capture_arrow_keys() {
     echo "Interactive mode: Use up arrow for 'dah' and down arrow for 'dit'. Press 'q' to exit."
     local oldState key
     oldState=$(stty -g)
     stty raw -echo min 0 time 0
-	while IFS= read -r -n1 key; do
+    while IFS= read -r -n1 key; do
         [[ $key == $'\x1b' ]] && {
             read -r -n2 -t 0.1 key2
             key+="$key2"
         }
 
         case $key in
-            $'\x1b[A') # Setas para cima
+            $'\x1b[A') # Up arrow
                 emit_sound "-"
                 echo -n "dah "
                 ;;
-            $'\x1b[B') # Setas para baixo
+            $'\x1b[B') # Down arrow
                 emit_sound "."
                 echo -n "dit "
                 ;;
-            q) # Sair
+            q) # Exit
                 break
                 ;;
             *)
@@ -91,7 +94,19 @@ capture_arrow_keys() {
     echo "Exiting interactive mode."
 }
 
-# Main loop with instructions
+# Enhanced frequency adjustment function with validation
+adjust_frequency() {
+    echo "Enter new sound frequency (in Hz):"
+    read -r freq
+    if [[ $freq =~ ^[0-9]+$ ]] && (( freq >= 20 && freq <= 20000 )); then
+        FREQUENCY=$freq
+        echo "Frequency set to $FREQUENCY Hz."
+    else
+        echo "Invalid input. Frequency must be between 20 and 20000 Hz."
+    fi
+}
+
+# Main loop with instructions and enhanced option handling
 clear
 echo "Instructions:"
 echo "- Type 't' to convert text to Morse and play it."
@@ -112,14 +127,7 @@ while :; do
             capture_arrow_keys
             ;;
         f)
-            echo "Enter new sound frequency (in Hz):"
-            read -r freq
-            if [[ $freq =~ ^[0-9]+$ ]]; then
-                FREQUENCY=$freq
-                echo "Frequency set to $FREQUENCY Hz."
-            else
-                echo "Invalid input. Frequency unchanged."
-            fi
+            adjust_frequency
             ;;
         q)
             echo "Program terminated."
